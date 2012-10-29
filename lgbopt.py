@@ -25,10 +25,17 @@
 
     J. Nocedal and S. Wright. Numerical Optimization.
 
-"""
-import numpy as np
+    Author: Alexis Mignon (c) Oct. 2012
+    E-mail: alexis.mignon@gmail.com
 
-def line_search(f, x0, df0, p=None, f0=None, alpha_0=1, c=1e-4, inner=np.inner, maxiter=100, rho_lo=1e-3, rho_hi=0.9):
+"""
+try:
+    from numpy import inner
+except ImportError:
+    def inner(x,y):
+        return sum([ xi * yi for xi,yi in zip(x,y)])
+
+def line_search(f, x0, df0, p=None, f0=None, alpha_0=1, c=1e-4, inner=inner, maxiter=100, rho_lo=1e-3, rho_hi=0.9):
     """ Interpolation Line search for the steapest gradient descent.
 
     Finds the a step length in the descending direction -df0 verifying
@@ -136,7 +143,7 @@ def _print_info(iter, fval, grad_norm):
     print "iter:", iter, "fval:", fval, "|grad|:", grad_norm
 
 def fmin_gd(f, df, x0, alpha_0=1.0, gtol=1e-6, maxiter=100,
-            maxiter_line_search=100, c=1e-4, inner=np.inner,
+            maxiter_line_search=100, c=1e-4, inner=inner,
             rho_lo=1e-3, rho_hi=0.9, 
             verbose=False, callback=None):
     """ Steepest gradient descent optimization.
@@ -220,7 +227,7 @@ def fmin_gd(f, df, x0, alpha_0=1.0, gtol=1e-6, maxiter=100,
         f0 = f1
 
 def fmin_lbfgs(f, df, x0, alpha_0=1.0, m=5, gtol=1e-6, maxiter=100,
-                maxiter_line_search=10, c=1e-4, inner=np.inner,
+                maxiter_line_search=10, c=1e-4, inner=inner,
                 verbose=False, rho_lo=1e-3, rho_hi=0.9, callback=None):
     """ Optimization with the Low-memory Broyden, Fletcher, Goldfarb,
     and Shanno (l-BFGS) quasi-Newton method.
