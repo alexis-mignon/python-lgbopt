@@ -3,6 +3,10 @@ python-lgbopt
 
 Light Gradient Based Optimization.
 
+Author: Alexis Mignon (c) Oct. 2012
+E-mail: alexis.mignon@gmail.com
+
+
 This module provides routines for gradient based optimization.
 It focuses on the case where gradient computation is expensive
 and should be avoided as much as possible.
@@ -32,6 +36,5 @@ gradient values) is that they support some basic operations
 in normed vector spaces:
 - addition,
 - multiplication by a scalar,
-- inner product (a custom inner production function can
-  be provided).
+- inner product (a custom inner product function can be provided).
 
