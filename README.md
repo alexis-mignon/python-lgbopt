@@ -39,3 +39,4 @@ in normed vector spaces:
 - multiplication by a scalar,
 - inner product (a custom inner product function can be provided).
 
+[![githalytics.com alpha](https://cruel-carlota.pagodabox.com/c1896e30691c1ab9b46264f4776b69bd "githalytics.com")](http://githalytics.com/alexis-mignon/python-lgbopt)
