@@ -17,10 +17,11 @@ quadratic and cubic interpolation as described in:
 
 J. Nocedal and S. Wright. Numerical Optimization. Chap.3 p56
 
-Two optimization schemes are provided:
+Three optimization schemes are provided:
 - steepest gradient descent (since sometimes it's still the
    most practicle way to do it).
 - low-memory GFBS Quasi-Newton method.
+- conjugate gradient (Fletcher-Reeves method)
 
 Why writing optimization code while there exists optimized 
 packages to do so ?
