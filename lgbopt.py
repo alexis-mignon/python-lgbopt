@@ -27,6 +27,9 @@
         uses l-gfbs quasi-Newton method (sparse approximation
         of the hessian matrix).
 
+    fmin_cg :
+        uses Fletcher-Reeves conjugate gradient method.
+
     :Note:
 
         The implementation is based on the description of the
