@@ -40,13 +40,13 @@
 """
 try:
     from numpy import inner as inner_
-    from numpy import sqrt
+    from numpy import sqrt, abs
 except ImportError:
     def inner_(x, y):
         """ Computes inner product between two vectors
         """
         return sum([ xi * yi for xi, yi in zip(x, y)])
-    from math import sqrt
+    from math import sqrt, abs
 
 def line_search(f, x0, df0, p=None, f0=None, alpha_0=1, c=1e-4, inner=inner_, 
                 maxiter=100, rho_lo=1e-3, rho_hi=0.9):
@@ -259,7 +259,7 @@ def fmin_gd(f, df, x0, alpha_0=1.0, gtol=1e-6, maxiter=100,
         dfx = df(x1)
         norm_dfx = inner(dfx, dfx)
         if verbose:
-            _print_info(iter, f1, norm_dfx)
+            _print_info(iter_, f1, norm_dfx)
         
         if norm_dfx <= gtol:
             return x1, f1
@@ -315,16 +315,6 @@ def fmin_lbfgs(f, df, x0, alpha_0=1.0, m=5, gtol=1e-6, maxiter=100,
     verbose : boolean
         If True, displays information about the convergence of the algorithm.
         
-    rho_lo : float
-        lowest ratio valued allowed between steps coefficient in concecutive
-        iterations. (default=1e-3)
-
-    rho_hi : float 
-        lowest ratio valued allowed between steps coefficient
-        in concecutive iterations. (default=0.9)
-        If not rho_lo <= alpha_[t+1]/alpha_[t] <= rho_hi, then
-        alpha_[t+1] = 0.5 * alpha_[t] is taken.
-
     callback: float
         A function called after each iteration. The function is called as
         callback(x).
@@ -388,7 +378,7 @@ def fmin_lbfgs(f, df, x0, alpha_0=1.0, m=5, gtol=1e-6, maxiter=100,
         norm_dfx1 = inner(dfx1, dfx1)
 
         if verbose:
-            _print_info(iter, f1, norm_dfx1)
+            _print_info(iter_, f1, norm_dfx1)
         
         if norm_dfx1 <= gtol:
             return x1, f1
@@ -419,3 +409,106 @@ def fmin_lbfgs(f, df, x0, alpha_0=1.0, m=5, gtol=1e-6, maxiter=100,
         f0 = f1
         dfx = dfx1
         gamma = gamma1
+
+def fmin_cg(f, df, x0, alpha_0=1.0, gtol=1e-6, maxiter=100, 
+            maxiter_line_search=100, c=1e-4, inner=inner_, 
+            restart_coef = 0.1, verbose=False, callback=None):
+    """ Steepest gradient descent optimization.
+
+    Parameters
+    ----------
+    f : callable
+        the function to be minimized.
+    df : callable
+        the function that computed the gradient.
+    x0 : array_like
+        the starting point.
+    alpha_0 : float. optional (default 1.0)
+        Starting value for the descent step.
+    gtol : float
+        the value of the gradient norm under which we consider the optimization
+        as converged.
+    maxiter : int
+        Maximum number of iterations allowed.
+    maxiter_line_search : int
+        Maximum number of iteration allowed for the inner line_search process.
+    c : float
+        The constant used for the sufficient decrease (Armijo) condition:
+            f(x + alpha * p) <= f(x) + c * alpha * < df(x), p >
+        (default = 1e-4)
+    inner : callable
+        the function used to compute the inner product. The default is the
+        ordinary dot product.
+    restart_coef : float
+        Replace conjugate gradient step with steapest descent step when:
+        < df(x[k]), df(x[k-1]) >/< df(x[k]), df(x[k]) > >= restart_coef
+        i.e. when the angle between two consecutive gradient directions
+        are not orthogonal enough.
+    verbose : boolean
+        If True, displays information about the convergence of the algorithm.
+
+    callback : callable
+        A function called after each iteration. The function
+        is called as callback(x).
+
+    Returns:
+    -------
+        (xopt, fval)
+
+    xopt : ndarray
+        The optimal point
+    fval : float
+        the optimal value found
+    """
+
+    f0 = f(x0)
+    dfx = df(x0)
+
+    norm_dfx = inner(dfx, dfx)
+
+    if verbose:
+        _print_info(0, f0, norm_dfx)
+
+    if norm_dfx <= gtol:
+        return x0, f0
+
+    p = -dfx
+
+    iter_ = 0
+    gamma = 1.0
+    
+    while True:
+        x1, f1 = line_search(f, x0, dfx, p=p, f0=f0, alpha_0=alpha_0, 
+                            c=c, inner=inner, maxiter=maxiter_line_search)
+        if f1 >= f0:
+            print "Could not minimize in the descent direction, try "+\
+                    "steapest direction"
+            return x0, f0
+
+        if callback is not None:
+            callback(x1)
+        iter_ += 1
+        if iter_ >= maxiter:
+            print "Maximum number of iteration reached."
+            return x1, f1
+
+        dfx1 = df(x1)
+        norm_dfx1 = inner(dfx1, dfx1)
+
+        if verbose:
+            _print_info(iter_, f1, norm_dfx1)
+        
+        if norm_dfx1 <= gtol:
+            return x1, f1
+            
+        angle = abs(inner(dfx, dfx1))/norm_dfx1
+        if angle >= restart_coef:
+            beta = 0.0
+            p = -dfx1
+        else:
+            beta = norm_dfx1/norm_dfx
+            p = - dfx1 + beta * p
+
+        x0 = x1
+        f0 = f1
+        dfx = dfx1
