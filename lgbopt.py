@@ -42,16 +42,80 @@
 
 """
 try:
-    from numpy import inner as inner_
-    from numpy import sqrt, abs
+    from numpy import sqrt, abs, inner as inner_, sum
 except ImportError:
     def inner_(x, y):
         """ Computes inner product between two vectors
         """
-        return sum([ xi * yi for xi, yi in zip(x, y)])
+        return sum(( xi * yi for xi, yi in zip(x, y)))
     from math import sqrt, abs
 
-def line_search(f, x0, df0, p=None, f0=None, alpha_0=1, c=1e-4, inner=inner_, 
+class MultiOptVar(object):
+    """ class MultiOptVar
+
+    class to hold an optimization variable made of several independent
+    variables.
+
+    MultiOptVar(var1, [var2, ...], inner=inner_)
+    
+    Parameters:
+    -----------
+    var1, var2, etc: objects
+        the independant variables. These variables must support
+        basic algebraic operations in vector spaces.
+
+    inner: function or list of functions, optional
+        The inner product to be used on independant variables.
+        If a single function is given then the inner product is assumed
+        to be the same for all variables.
+        If a list of function is given then they are used as inner
+        products for each independant variable respectively.
+        By default, the standard inner product on vectors is used.
+
+    """
+    def __init__(self, *variables, **kwargs):
+        """ constructor
+        """
+        self.variables = variables
+        inner = kwargs.get("inner", inner_)
+        try:
+            self.inner = list(inner)
+        except TypeError:
+            self.inner = [inner for i in range(len(variables))]
+
+    def __iter__(self):
+        return iter(self.variables)
+
+    def __mul__(self, scalar):
+        return MultiOptVar(*(scalar * var for var in self.variables), inner = self.inner)
+
+    def __rmul__(self, scalar):
+        return MultiOptVar(*(scalar * var for var in self.variables), inner = self.inner)
+
+    def __neg__(self, scalar):
+        return MultiOptVar(*(-var for var in self.variables), inner = self.inner)
+
+    def __add__(self, other):
+        return MultiOptVar(*(var1 + var2 for var1, var2 in zip(self.variables, other.variables)), inner = self.inner)
+
+    def __sub__(self, other):
+        return MultiOptVar(*(var1 - var2 for var1, var2 in zip(self.variables, other.variables)), inner = self.inner)
+
+    def __div__(self, scalar):
+        return MultiOptVar(*(var/scalar for var in self.variables), inner = self.inner)
+
+    def dot(self, other):
+        return sum(
+            [ inner(var1,var2) for var1, var2, inner
+                    in zip(self.variables, other.variables, self.inner)
+            ]
+        )
+
+    @staticmethod
+    def inner(var1, var2):
+        return var1.dot(var2)
+
+def line_search(f, x0, df0, p=None, f0=None, args=(), alpha_0=1.0, c=1e-4, inner=inner_, 
                 maxiter=100, rho_lo=1e-3, rho_hi=0.9):
     """ Interpolation Line search for the steapest gradient descent.
 
@@ -111,16 +175,16 @@ def line_search(f, x0, df0, p=None, f0=None, alpha_0=1, c=1e-4, inner=inner_,
     product is defined (through the 'inner' function).
     """
     if f0 is None:
-        f0 = f(x0)
+        f0 = f(x0, *args)
 
     if p is None:
         p = -df0
-    
+
     dphi0 = inner(df0, p)
-    
+
     x1 = x0 + alpha_0 * p
-    f1 = f(x1)
-    
+    f1 = f(x1, *args)
+
     if f1 <= f0 + c * alpha_0 * dphi0:
         return x1, f1
 
@@ -130,7 +194,7 @@ def line_search(f, x0, df0, p=None, f0=None, alpha_0=1, c=1e-4, inner=inner_,
 
     x2 = x0 + alpha_1 * p
 
-    f2 = f(x2)
+    f2 = f(x2, *args)
 
     if f2 <= f0 + c * alpha_1 * dphi0:
         return x2, f2
@@ -148,13 +212,13 @@ def line_search(f, x0, df0, p=None, f0=None, alpha_0=1, c=1e-4, inner=inner_,
         _3a = 3 * (alpha_0_2 * ff1 - alpha_1_2 * ff0) / den
         b = (alpha_1_2 * alpha_1 * ff0 - alpha_0_3 * ff1) / den
 
-        alpha_2 = (-b + sqrt(b*b - _3a * dphi0))/ _3a
+        alpha_2 = (-b + sqrt(max(0,b*b - _3a * dphi0)))/ _3a
 
         if not  rho_lo <= alpha_2/alpha_1 <= rho_hi:
             alpha_2 = alpha_1 / 2.
 
         x3 = x0 + alpha_2 * p
-        f3 = f(x3)
+        f3 = f(x3, *args)
 
         if f3 <= f0 + c * alpha_2 * dphi0:
             return x3, f3
@@ -172,11 +236,11 @@ def line_search(f, x0, df0, p=None, f0=None, alpha_0=1, c=1e-4, inner=inner_,
         alpha_0 = alpha_1
         alpha_1 = alpha_2
 
-def _print_info(iter_, fval, grad_norm):
+def _print_info(iter_, fval, grad_norm2):
     """ prints information about convergence"""
-    print "iter:", iter_, "fval:", fval, "|grad|:", grad_norm
+    print "iter:", iter_, "fval:", fval, "|grad|:", sqrt(grad_norm2)
 
-def fmin_gd(f, df, x0, alpha_0=1.0, gtol=1e-6, maxiter=100, 
+def fmin_gd(f, df, x0, args=(), alpha_0=1.0, gtol=1e-6, maxiter=100, 
             maxiter_line_search=100, c=1e-4, inner=inner_, 
             rho_lo=1e-3, rho_hi=0.9, 
             verbose=False, callback=None):
@@ -230,8 +294,8 @@ def fmin_gd(f, df, x0, alpha_0=1.0, gtol=1e-6, maxiter=100,
         the optimal value found
     """
 
-    f0 = f(x0)
-    dfx = df(x0)
+    f0 = f(x0, *args)
+    dfx = df(x0, *args)
 
     alpha_start = alpha_0
     norm_dfx = inner(dfx, dfx)
@@ -239,18 +303,24 @@ def fmin_gd(f, df, x0, alpha_0=1.0, gtol=1e-6, maxiter=100,
     if verbose:
         _print_info(0, f0, norm_dfx)
 
-    if norm_dfx <= gtol:
+    if norm_dfx <= gtol * gtol:
         return x0, f0
 
     iter_ = 0
     while True:
-        x1, f1 = line_search(f, x0, dfx, f0=f0, alpha_0=alpha_start, 
-                                c=c, inner=inner_, 
+        x1, f1 = line_search(f, x0, dfx, f0=f0, args=args,
+                                alpha_0=alpha_start, c=c, inner=inner, 
                                 maxiter=maxiter_line_search, 
                                 rho_lo=rho_lo, rho_hi=rho_hi)
         if f1 >= f0:
-            print "Could not minimize in the descent direction"
-            return x0, f0
+            alpha_start = alpha_0
+            x1, f1 = line_search(f, x0, dfx, f0=f0, args=args,
+                                alpha_0=alpha_start, c=c, inner=inner, 
+                                maxiter=maxiter_line_search, 
+                                rho_lo=rho_lo, rho_hi=rho_hi)
+            if f1 >= f0:
+                print "Could not minimize in the descent direction"
+                return x0, f0
 
         if callback is not None:
             callback(x1)
@@ -259,19 +329,19 @@ def fmin_gd(f, df, x0, alpha_0=1.0, gtol=1e-6, maxiter=100,
             print "Maximum number of iteration reached."
             return x1, f1
 
-        dfx = df(x1)
+        dfx = df(x1, *args)
         norm_dfx = inner(dfx, dfx)
         if verbose:
             _print_info(iter_, f1, norm_dfx)
         
-        if norm_dfx <= gtol:
+        if norm_dfx <= gtol * gtol:
             return x1, f1
 
         alpha_start = 2*(f0 - f1)/norm_dfx
         x0 = x1
         f0 = f1
 
-def fmin_lbfgs(f, df, x0, alpha_0=1.0, m=5, gtol=1e-6, maxiter=100, 
+def fmin_lbfgs(f, df, x0, args=(), alpha_0=1.0, m=5, gtol=1e-6, maxiter=100, 
                 maxiter_line_search=10, c=1e-4, inner=inner_, 
                 verbose=False, rho_lo=1e-3, rho_hi=0.9, callback=None):
     """ Optimization with the Low-memory Broyden, Fletcher, Goldfarb, 
@@ -345,15 +415,15 @@ def fmin_lbfgs(f, df, x0, alpha_0=1.0, m=5, gtol=1e-6, maxiter=100,
     """
     sy = []
 
-    f0 = f(x0)
-    dfx = df(x0)
+    f0 = f(x0, *args)
+    dfx = df(x0, *args)
 
     norm_dfx = inner(dfx, dfx)
 
     if verbose:
         _print_info(0, f0, norm_dfx)
 
-    if norm_dfx <= gtol:
+    if norm_dfx <= gtol * gtol:
         return x0, f0
 
     p = -dfx
@@ -362,13 +432,22 @@ def fmin_lbfgs(f, df, x0, alpha_0=1.0, m=5, gtol=1e-6, maxiter=100,
     gamma = 1.0
     
     while True:
-        x1, f1 = line_search(f, x0, dfx, p=p, f0=f0, alpha_0=alpha_0, 
+        x1, f1 = line_search(f, x0, dfx, p=p, f0=f0, args=args,
+                            alpha_0=alpha_0, 
                             c=c, inner=inner, maxiter=maxiter_line_search, 
                             rho_lo=rho_lo, rho_hi=rho_hi)
         if f1 >= f0:
             print "Could not minimize in the descent direction, try "+\
-                    "steapest direction"
-            return x0, f0
+                    "steepest direction"
+            sy = []
+            p = -dfx
+            x1, f1 = line_search(f, x0, dfx, p=p, f0=f0, args=args,
+                            alpha_0=alpha_0, 
+                            c=c, inner=inner, maxiter=maxiter_line_search, 
+                            rho_lo=rho_lo, rho_hi=rho_hi)
+            if f1 >= f0:
+                print "Could not minimize in the steepest direction: abort"
+                return x0, f0
 
         if callback is not None:
             callback(x1)
@@ -377,13 +456,13 @@ def fmin_lbfgs(f, df, x0, alpha_0=1.0, m=5, gtol=1e-6, maxiter=100,
             print "Maximum number of iteration reached."
             return x1, f1
 
-        dfx1 = df(x1)
+        dfx1 = df(x1, *args)
         norm_dfx1 = inner(dfx1, dfx1)
 
         if verbose:
             _print_info(iter_, f1, norm_dfx1)
         
-        if norm_dfx1 <= gtol:
+        if norm_dfx1 <= gtol * gtol:
             return x1, f1
 
         s = (x1-x0)
@@ -392,7 +471,7 @@ def fmin_lbfgs(f, df, x0, alpha_0=1.0, m=5, gtol=1e-6, maxiter=100,
         gamma1 = inner(y, s)/inner(y, y)
         
         sy.append((y, s, rho))
-        if len(s) > m:
+        if len(sy) > m:
             sy.pop(0)
 
         q = dfx1.copy()
@@ -413,7 +492,7 @@ def fmin_lbfgs(f, df, x0, alpha_0=1.0, m=5, gtol=1e-6, maxiter=100,
         dfx = dfx1
         gamma = gamma1
 
-def fmin_cg(f, df, x0, alpha_0=1.0, gtol=1e-6, maxiter=100, 
+def fmin_cg(f, df, x0, args=(), alpha_0=1.0, gtol=1e-6, maxiter=100, 
             maxiter_line_search=100, c=1e-4, inner=inner_, 
             restart_coef = 0.1, verbose=False, callback=None):
     """ Steepest gradient descent optimization.
@@ -464,15 +543,15 @@ def fmin_cg(f, df, x0, alpha_0=1.0, gtol=1e-6, maxiter=100,
         the optimal value found
     """
 
-    f0 = f(x0)
-    dfx = df(x0)
+    f0 = f(x0, *args)
+    dfx = df(x0, *args)
 
     norm_dfx = inner(dfx, dfx)
 
     if verbose:
         _print_info(0, f0, norm_dfx)
 
-    if norm_dfx <= gtol:
+    if norm_dfx <= gtol * gtol:
         return x0, f0
 
     p = -dfx
@@ -481,11 +560,20 @@ def fmin_cg(f, df, x0, alpha_0=1.0, gtol=1e-6, maxiter=100,
     gamma = 1.0
     
     while True:
-        x1, f1 = line_search(f, x0, dfx, p=p, f0=f0, alpha_0=alpha_0, 
-                            c=c, inner=inner, maxiter=maxiter_line_search)
+        x1, f1 = line_search(f, x0, dfx, p=p, f0=f0, args=args,
+                            alpha_0=alpha_0, c=c,
+                            inner=inner, maxiter=maxiter_line_search)
         if f1 >= f0:
             print "Could not minimize in the descent direction, try "+\
-                    "steapest direction"
+                    "steepest direction"
+            beta = 0.0
+            p = -dfx1
+            x1, f1 = line_search(f, x0, dfx, p=p, f0=f0, args=args,
+                            alpha_0=alpha_0, c=c,
+                            inner=inner, maxiter=maxiter_line_search)
+            if f1 >= f0:
+                print "Could not minimize in the steepest direction:"+\
+                        " abort."
             return x0, f0
 
         if callback is not None:
@@ -495,13 +583,13 @@ def fmin_cg(f, df, x0, alpha_0=1.0, gtol=1e-6, maxiter=100,
             print "Maximum number of iteration reached."
             return x1, f1
 
-        dfx1 = df(x1)
+        dfx1 = df(x1, *args)
         norm_dfx1 = inner(dfx1, dfx1)
 
         if verbose:
             _print_info(iter_, f1, norm_dfx1)
         
-        if norm_dfx1 <= gtol:
+        if norm_dfx1 <= gtol * gtol:
             return x1, f1
             
         angle = abs(inner(dfx, dfx1))/norm_dfx1
