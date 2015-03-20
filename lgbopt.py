@@ -92,7 +92,7 @@ class MultiOptVar(object):
     def __rmul__(self, scalar):
         return MultiOptVar(*(scalar * var for var in self.variables), inner = self.inner)
 
-    def __neg__(self, scalar):
+    def __neg__(self):
         return MultiOptVar(*(-var for var in self.variables), inner = self.inner)
 
     def __add__(self, other):
